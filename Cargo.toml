@@ -1,0 +1,48 @@
+[workspace]
+members = [
+    "fuzz/fuzz_scan_trusted"
+]
+
+[package]
+name = "squirrel-json"
+version = "0.0.0"
+authors = ["Datalust"]
+edition = "2018"
+build = "build.rs"
+license = "MIT OR Apache-2.0"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+# Enabling `serde_json` allows converting `Document`s to `serde_json::Value`s
+[dependencies.serde_json]
+version = "1"
+optional = true
+
+# On WASM we'll use the fallback parser
+[target.'cfg(target_arch = "wasm32")'.dependencies.wasm-bindgen]
+version = "0.2"
+features = ["serde-serialize"]
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies.wasm-bindgen-test]
+version = "0.3"
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies.js-sys]
+version = "0.3"
+
+[dev-dependencies.serde_json]
+version = "1"
+
+[dev-dependencies.json]
+version = "0.12"
+
+[dev-dependencies.simd-json]
+version = "0.3"
+features = [
+    # Doesn't disable the SIMD implementation, it just doesn't fail to compile
+    # if we don't pass `target-cpu=native`
+    "allow-non-simd"
+]
+
+[build-dependencies.version_check]
+version = "0.9"
