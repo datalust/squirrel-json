@@ -29,16 +29,16 @@ jobs:
         rustup default ${{ matrix.rust }}
     - run: cargo test --all --verbose
 
-    bench:
-      name: Bench (no run)
-      runs-on: ubuntu-latest
-      steps:
-        - uses: actions/checkout@master
-        - name: Install Rust
-          run: |
-            rustup update nightly --no-self-update
-            rustup default nightly
-        - run: cargo bench --no-run --verbose
+  bench:
+    name: Bench (no run)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@master
+      - name: Install Rust
+        run: |
+          rustup update nightly --no-self-update
+          rustup default nightly
+      - run: cargo bench --no-run --verbose
 
   wasm:
     name: WebAssembly
