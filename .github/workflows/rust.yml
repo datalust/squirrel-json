@@ -1,22 +1,53 @@
-name: Rust
-
-on:
-  push:
-    branches: [ dev ]
-  pull_request:
-    branches: [ dev ]
-
-env:
-  CARGO_TERM_COLOR: always
+name: CI
+on: [push, pull_request]
 
 jobs:
-  build:
-
-    runs-on: ubuntu-latest
-
+  test:
+    name: Test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        build: [ubuntu, macos, windows]
+        include:
+          - build: ubuntu
+            os: ubuntu-latest
+            rust: stable
+          - build: nightly
+            os: ubuntu-latest
+            rust: nightly
+          - build: macos
+            os: macos-latest
+            rust: stable
+          - build: windows
+            os: windows-latest
+            rust: stable-x86_64
     steps:
-    - uses: actions/checkout@v2
-    - name: Build
-      run: cargo build --verbose
-    - name: Run tests
-      run: cargo test --verbose
+    - uses: actions/checkout@master
+    - name: Install Rust (rustup)
+      run: |
+        rustup update ${{ matrix.rust }} --no-self-update
+        rustup default ${{ matrix.rust }}
+    - run: cargo test --all --verbose
+
+    bench:
+      name: Bench (no run)
+      runs-on: ubuntu-latest
+      steps:
+        - uses: actions/checkout@master
+        - name: Install Rust
+          run: |
+            rustup update nightly --no-self-update
+            rustup default nightly
+        - run: cargo bench --no-run --verbose
+
+  wasm:
+    name: WebAssembly
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@master
+      - name: Install Rust
+        run: |
+          rustup update nightly --no-self-update
+          rustup default nightly
+      - run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+      - run: wasm-pack test --node

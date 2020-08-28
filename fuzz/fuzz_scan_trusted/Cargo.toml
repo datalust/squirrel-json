@@ -1,0 +1,20 @@
+[package]
+name = "fuzz_scan_trusted"
+version = "0.0.0"
+authors = ["Datalust Pty Ltd"]
+edition = "2018"
+publish = false
+
+[dependencies.serde_json]
+version = "1"
+
+[dependencies.squirrel-json]
+path = "../../"
+features = ["serde_json"]
+
+[dependencies.afl]
+version = "0.5"
+optional = true
+
+[build-dependencies.version_check]
+version = "0.9"
