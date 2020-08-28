@@ -36,7 +36,7 @@ version = "1"
 [dev-dependencies.json]
 version = "0.12"
 
-[dev-dependencies.simd-json]
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies.simd-json]
 version = "0.3"
 features = [
     # Doesn't disable the SIMD implementation, it just doesn't fail to compile
