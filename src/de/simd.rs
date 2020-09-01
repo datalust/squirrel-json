@@ -68,24 +68,24 @@ mod x86_64 {
             // first, find quotes and escapes in the input
             // we do this separately to optimize the case where
             // we're inside a big string and don't need to match for other structural chars
-            let mask_quote = {
+            let index_quote = {
                 let match_quote = _mm256_cmpeq_epi8(i, _mm256_set1_epi8(b'"' as i8));
-                let mask_quote = _mm256_movemask_epi8(match_quote);
+                let index_quote = _mm256_movemask_epi8(match_quote);
 
                 let match_escape = _mm256_cmpeq_epi8(i, _mm256_set1_epi8(b'\\' as i8));
-                let mask_escape = _mm256_movemask_epi8(match_escape);
+                let index_escape = _mm256_movemask_epi8(match_escape);
 
-                mask_quote | mask_escape
+                index_quote | index_escape
             };
 
             // HEURISTIC: if there are no quotes or escapes and we're inside a big string then
             // there's no need to look for any other interest chars
-            if mask_quote != 0 || scan.simd.active_mask == ActiveMask::Interest {
+            if index_quote != 0 || scan.simd.active_index == ActiveIndex::Interest {
                 // use a lookup table to classify characters in the input into groups
                 // this is the same approach used by `simd-json`, which makes it possible
                 // to identify a large number of characters in a 32byte buffer using only a few
                 // instructions
-                let mask_interest = {
+                let index_interest = {
                     let lo = i;
                     let match_interest_lo = _mm256_shuffle_epi8(interest.lo, lo);
 
@@ -95,28 +95,28 @@ mod x86_64 {
                     let interest_hi_lo = _mm256_and_si256(match_interest_lo, match_interest_hi);
 
                     let match_interest = _mm256_cmpeq_epi8(interest_hi_lo, _mm256_set1_epi8(0));
-                    let mask_interest = _mm256_movemask_epi8(match_interest);
+                    let index_interest = _mm256_movemask_epi8(match_interest);
 
-                    !mask_interest
+                    !index_interest
                 };
 
-                test_assert_eq!(mask_interest, mask_quote | mask_interest);
+                test_assert_eq!(index_interest, index_quote | index_interest);
 
-                scan.set_masks(Masks {
-                    interest: mask_interest,
-                    quote: mask_quote,
+                scan.set_indexes(Indexes {
+                    interest: index_interest,
+                    quote: index_quote,
                 });
 
-                'block: while scan.simd.masks.interest != 0 {
+                'block: while scan.simd.indexes.interest != 0 {
                     // advance through the block by shifting over zeros in the mask
                     // this is more efficient than looking at each byte individually
-                    let block_offset = scan.simd.masks[scan.simd.active_mask].trailing_zeros();
+                    let block_offset = scan.simd.indexes[scan.simd.active_index].trailing_zeros();
                     test_assert!(block_offset < 32);
 
                     let shift = (!0i64 << (block_offset + 1)) as i32;
 
-                    scan.simd.masks.interest &= shift;
-                    scan.simd.masks.quote &= shift;
+                    scan.simd.indexes.interest &= shift;
+                    scan.simd.indexes.quote &= shift;
 
                     let input_offset = scan.input_offset as usize + block_offset as usize;
                     test_assert!(input_offset < scan.input_len as usize);
@@ -159,12 +159,12 @@ mod x86_64 {
 
     impl Scan {
         #[inline(always)]
-        fn set_masks(&mut self, masks: Masks) {
-            self.simd.masks = masks;
+        fn set_indexes(&mut self, masks: Indexes) {
+            self.simd.indexes = masks;
 
-            match self.simd.active_mask {
-                ActiveMask::Interest => pre_mask_interest(&mut self.simd.masks),
-                ActiveMask::Quote => pre_mask_quote(&mut self.simd.masks),
+            match self.simd.active_index {
+                ActiveIndex::Interest => pre_index_interest(&mut self.simd.indexes),
+                ActiveIndex::Quote => pre_index_quote(&mut self.simd.indexes),
             }
         }
     }
@@ -226,8 +226,8 @@ mod x86_64 {
 
         #[test]
         fn active_mask_has_correct_repr() {
-            assert_eq!(0isize, ActiveMask::Interest as isize);
-            assert_eq!(1isize, ActiveMask::Quote as isize);
+            assert_eq!(0isize, ActiveIndex::Interest as isize);
+            assert_eq!(1isize, ActiveIndex::Quote as isize);
         }
 
         #[test]
@@ -242,47 +242,47 @@ pub(super) use x86_64::scan;
 
 #[derive(Debug)]
 pub(super) struct Simd {
-    masks: Masks,
-    active_mask: ActiveMask,
+    indexes: Indexes,
+    active_index: ActiveIndex,
 }
 
 impl Simd {
     #[inline(always)]
     pub(super) fn new() -> Self {
         Simd {
-            masks: Masks {
+            indexes: Indexes {
                 interest: 0,
                 quote: 0,
             },
-            active_mask: ActiveMask::Interest,
+            active_index: ActiveIndex::Interest,
         }
     }
 }
 
 impl Scan {
     #[inline(always)]
-    pub(super) fn set_mask_quote(&mut self) {
-        self.simd.active_mask = ActiveMask::Quote;
-        pre_mask_quote(&mut self.simd.masks);
+    pub(super) fn set_index_quote(&mut self) {
+        self.simd.active_index = ActiveIndex::Quote;
+        pre_index_quote(&mut self.simd.indexes);
     }
 
     #[inline(always)]
-    pub(super) fn shift_mask_quote(&mut self) {
-        test_assert_eq!(ActiveMask::Quote, self.simd.active_mask);
-        pre_mask_quote(&mut self.simd.masks);
+    pub(super) fn shift_index_quote(&mut self) {
+        test_assert_eq!(ActiveIndex::Quote, self.simd.active_index);
+        pre_index_quote(&mut self.simd.indexes);
     }
 
     #[inline(always)]
-    pub(super) fn set_mask_interest(&mut self) {
-        self.simd.active_mask = ActiveMask::Interest;
-        pre_mask_interest(&mut self.simd.masks);
+    pub(super) fn set_index_interest(&mut self) {
+        self.simd.active_index = ActiveIndex::Interest;
+        pre_index_interest(&mut self.simd.indexes);
     }
 }
 
 #[repr(C)]
 #[repr(align(4))]
 #[derive(Debug, Default, Clone, Copy)]
-pub(super) struct Masks {
+pub(super) struct Indexes {
     // note: the order of these fields cannot be changed
     // they must match the set of variants in `ActiveMask`
     interest: i32,
@@ -292,40 +292,40 @@ pub(super) struct Masks {
 // note: these fields cannot be changed without `Masks`
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[repr(isize)]
-enum ActiveMask {
+enum ActiveIndex {
     Interest,
     Quote,
 }
 
-impl Default for ActiveMask {
+impl Default for ActiveIndex {
     #[inline(always)]
     fn default() -> Self {
-        ActiveMask::Interest
+        ActiveIndex::Interest
     }
 }
 
-impl Index<ActiveMask> for Masks {
+impl Index<ActiveIndex> for Indexes {
     type Output = i32;
 
     #[inline(always)]
-    fn index(&self, id: ActiveMask) -> &i32 {
+    fn index(&self, id: ActiveIndex) -> &i32 {
         // SAFETY: this is safe because the index is within the range of `Masks`
-        unsafe { &*(self as *const Masks as *const i32).offset(id as isize) }
+        unsafe { &*(self as *const Indexes as *const i32).offset(id as isize) }
     }
 }
 
-// when the quote mask is active, unset all bits in the interest
+// when the quote index is active, unset all bits in the interest
 // mask up to the next quote character
 #[inline(always)]
-fn pre_mask_quote(masks: &mut Masks) {
-    let offset = masks.quote.trailing_zeros();
+fn pre_index_quote(indexes: &mut Indexes) {
+    let offset = indexes.quote.trailing_zeros();
 
     // Exclude control characters up to the next quote or escape
     let shift = (!0i64 << offset) as i32;
-    masks.interest &= shift;
+    indexes.interest &= shift;
 }
 
-// when the interest mask is active, there's no need to
+// when the interest index is active, there's no need to
 // do anything
 #[inline(always)]
-fn pre_mask_interest(_: &mut Masks) {}
+fn pre_index_interest(_: &mut Indexes) {}
