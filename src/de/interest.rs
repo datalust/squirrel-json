@@ -230,7 +230,7 @@ pub(super) fn interest_str<'a, 'scan, I: BorrowMut<ScanFnInput<'a, 'scan>>>(mut 
             kind: ActivePrimitiveKind::Str,
             escaped,
         } => {
-            i.scan.set_mask_interest();
+            i.scan.set_index_interest();
 
             // ignore the trailing `"`
             let end = i.curr_offset;
@@ -244,7 +244,7 @@ pub(super) fn interest_str<'a, 'scan, I: BorrowMut<ScanFnInput<'a, 'scan>>>(mut 
             ));
         }
         _ => {
-            i.scan.set_mask_quote();
+            i.scan.set_index_quote();
 
             // skip over the leading `"`
             i.scan.stack.active_map_arr.active_primitive = ActivePrimitive {
@@ -287,7 +287,7 @@ pub(super) fn interest_unescape_now<'a, 'scan, I: BorrowMut<ScanFnInput<'a, 'sca
     let i = i.borrow_mut();
 
     // shift to the next quote or escape
-    i.scan.shift_mask_quote();
+    i.scan.shift_index_quote();
     i.scan.stack.active_map_arr.active_primitive.escaped = true;
     i.scan.escape = false;
 }
