@@ -14,6 +14,8 @@ very large numbers of normalized documents where only fragments of those documen
 to perform very well for sparse deserialization of pre-validated JSON maps at the expense of being
 unsuitable for just about anything else.
 
+See [this blog post](https://blog.datalust.co/deserializing-json-really-fast/) for some more details!
+
 ## ⚠️ CAREFUL
 
 This library is designed for parsing pre-validated, minified JSON maps. It guarantees UB freedom
