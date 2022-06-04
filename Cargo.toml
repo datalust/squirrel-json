@@ -32,6 +32,9 @@ version = "0.3"
 
 [dev-dependencies.rand]
 version = "0.8"
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies.getrandom]
+version = "0.2"
 features = ["js"]
 
 [dev-dependencies.serde_json]
