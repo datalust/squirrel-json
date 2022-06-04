@@ -32,6 +32,7 @@ version = "0.3"
 
 [dev-dependencies.rand]
 version = "0.8"
+features = ["js"]
 
 [dev-dependencies.serde_json]
 version = "1"
