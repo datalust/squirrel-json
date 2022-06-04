@@ -230,7 +230,10 @@ pub(super) fn interest_str<'a, 'scan, I: BorrowMut<ScanFnInput<'a, 'scan>>>(mut 
             kind: ActivePrimitiveKind::Str,
             escaped,
         } => {
-            i.scan.set_index_interest();
+            #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+            {
+                i.scan.set_mask_interest();
+            }
 
             // ignore the trailing `"`
             let end = i.curr_offset;
@@ -244,7 +247,10 @@ pub(super) fn interest_str<'a, 'scan, I: BorrowMut<ScanFnInput<'a, 'scan>>>(mut 
             ));
         }
         _ => {
-            i.scan.set_index_quote();
+            #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+            {
+                i.scan.set_mask_quote();
+            }
 
             // skip over the leading `"`
             i.scan.stack.active_map_arr.active_primitive = ActivePrimitive {
@@ -287,7 +293,10 @@ pub(super) fn interest_unescape_now<'a, 'scan, I: BorrowMut<ScanFnInput<'a, 'sca
     let i = i.borrow_mut();
 
     // shift to the next quote or escape
-    i.scan.shift_index_quote();
+    #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+    {
+        i.scan.shift_mask_quote();
+    }
     i.scan.stack.active_map_arr.active_primitive.escaped = true;
     i.scan.escape = false;
 }
@@ -438,8 +447,21 @@ pub(super) fn interest_key_end<'a, 'scan, I: BorrowMut<ScanFnInput<'a, 'scan>>>(
 }
 
 #[inline(always)]
-pub(super) fn interest_value_elem_end<'a, 'scan, I: BorrowMut<ScanFnInput<'a, 'scan>>>(i: I) {
-    interest_num_end(i);
+pub(super) fn interest_value_elem_end<'a, 'scan, I: BorrowMut<ScanFnInput<'a, 'scan>>>(mut i: I) {
+    let i = i.borrow_mut();
+
+    interest_num_end(&mut *i);
+
+    test_assert_eq!(
+        i.scan.stack.active_map_arr.active_primitive.kind,
+        ActivePrimitiveKind::None
+    );
+
+    // ignore the control character
+    i.curr_offset += 1;
+    i.curr = *get_unchecked!(i.input, i.curr_offset);
+
+    match_primitive(i);
 }
 
 #[inline(always)]

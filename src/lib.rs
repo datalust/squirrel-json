@@ -23,18 +23,21 @@ variant in test/debug builds (or when the `checked` feature is enabled) to make 
 ever cause UB when working through documents.
 */
 
-#![cfg_attr(checked, deny(warnings))]
-#![allow(unused_labels)] // labels are fun
-#![allow(clippy::missing_safety_doc)] // false positives
-#![allow(clippy::question_mark)] // generates slow code
-
-pub(crate) mod std_ext;
+#![cfg_attr(target_arch = "aarch64", feature(stdsimd))]
+#![deny(warnings)]
+#![allow(
+    unused_labels,
+    clippy::missing_safety_doc,
+    clippy::question_mark,
+    clippy::upper_case_acronyms
+)]
 
 #[macro_use]
 mod macros;
 
-mod unescape;
+mod std_ext;
 
+mod unescape;
 pub mod de;
 pub use de::Document;
 

@@ -68,7 +68,7 @@ fn invalid_escape() {
     let input = b"{\"a\":\"this string as an invalid \\j escape in it\"}";
 
     let document = Document::scan_trusted_fallback(input);
-    let _ = document.to_value();
+    drop(document.to_value());
 }
 
 #[test]
@@ -76,7 +76,7 @@ fn invalid_map_terminated_as_arr() {
     // maps that are terminated with a `]` instead of a `}` are not detected
     // `a` will probably be considered an array now of just the string keys in the map
     let document = Document::scan_trusted_fallback(b"{\"a\":{\"b\":123]}");
-    let _ = document.to_value();
+    drop(document.to_value());
 }
 
 #[test]
@@ -84,7 +84,7 @@ fn invalid_arr_terminated_as_map() {
     // arrays that are terminated with a `}` instead of a `]` are not detected
     // `a` will probably be considered a map that interleaves keys and values in the elements
     let document = Document::scan_trusted_fallback(b"{\"a\":[\"b\",\"c\",\"d\"}}");
-    let _ = document.to_value();
+    drop(document.to_value());
 }
 
 #[test]
@@ -92,7 +92,7 @@ fn invalid_arr_single_elem_terminated_as_map() {
     // arrays that are terminated with a `}` instead of a `]` are not detected
     // `a` will probably be considered an empty map because it doesn't have at least 2 elements
     let document = Document::scan_trusted_fallback(b"{\"a\":[\"b\"}}");
-    let _ = document.to_value();
+    drop(document.to_value());
 }
 
 #[test]
@@ -100,7 +100,7 @@ fn invalid_arr_terminated_as_map_non_string() {
     // arrays that are terminated with a `}` instead of a `]` are not detected
     // `a` will probably be considered an empty map because it doesn't have string keys
     let document = Document::scan_trusted_fallback(b"{\"a\":[{},{}}}");
-    let _ = document.to_value();
+    drop(document.to_value());
 }
 
 #[test]
@@ -108,60 +108,60 @@ fn invalid_map_with_missing_key() {
     // documents with a missing key before their value are not detected
     // the document will probably be considered an empty map because it only has one offset
     let document = Document::scan_trusted_fallback(b"{:42e10}");
-    let _ = document.to_value();
+    drop(document.to_value());
 }
 
 #[test]
 fn invalid_unescape_unknown() {
-    let _ = unsafe { unescape_trusted("\\j") };
+    drop(unsafe { unescape_trusted("\\j") });
 }
 
 #[test]
 fn invalid_unescape_unknown_multibyte() {
-    let _ = unsafe { unescape_trusted("\\😄 and some more") };
+    drop(unsafe { unescape_trusted("\\😄 and some more") });
 }
 
 #[test]
 fn invalid_unescape_utf8_truncated() {
-    let _ = unsafe { unescape_trusted("\\u58") };
+    drop(unsafe { unescape_trusted("\\u58") });
 }
 
 #[test]
 fn invalid_unescape_utf8_no_escape() {
-    let _ = unsafe { unescape_trusted("\\u") };
+    drop(unsafe { unescape_trusted("\\u") });
 }
 
 #[test]
 fn invalid_unescape_utf8_non_digit() {
-    let _ = unsafe { unescape_trusted("\\u58\\r") };
+    drop(unsafe { unescape_trusted("\\u58\\r") });
 }
 
 #[test]
 fn invalid_unescape_non_digit_multibyte() {
-    let _ = unsafe { unescape_trusted("\\u壁") };
+    drop(unsafe { unescape_trusted("\\u壁") });
 }
 
 #[test]
 fn invalid_unescape_multibyte_non_digit_all_slash() {
-    let _ = unsafe { unescape_trusted("\\\\\\u\\\\") };
+    drop(unsafe { unescape_trusted("\\\\\\u\\\\") });
 }
 
 #[test]
 fn invalid_unescape_surrogate_pair_truncated() {
-    let _ = unsafe { unescape_trusted("\\ud83d\\ude") };
+    drop(unsafe { unescape_trusted("\\ud83d\\ude") });
 }
 
 #[test]
 fn invalid_unescape_surrogate_pair_non_digit() {
-    let _ = unsafe { unescape_trusted("\\ud83d\\ude\\r") };
+    drop(unsafe { unescape_trusted("\\ud83d\\ude\\r") });
 }
 
 #[test]
 fn invalid_unescape_surrogate_pair_split() {
-    let _ = unsafe { unescape_trusted("\\ud83dsome bytes \\ude04") };
+    drop(unsafe { unescape_trusted("\\ud83dsome bytes \\ude04") });
 }
 
 #[test]
 fn invalid_unescape_surrogate_pair() {
-    let _ = unsafe { unescape_trusted("\\uffff\\uffff") };
+    drop(unsafe { unescape_trusted("\\uffff\\uffff") });
 }

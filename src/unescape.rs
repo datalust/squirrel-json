@@ -13,12 +13,14 @@ fallback implementation using a shared set of functions. It's docs have some mor
 use std::{borrow::BorrowMut, ptr, str};
 
 mod fallback;
+
+#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
 mod simd;
 
 // SAFETY: The string must not end with a `\` unless it's been escaped
 // This is guaranteed for strings parsed from JSON, because string boundaries
 // with a leading `\` are considered escapes and won't terminate the string
-#[cfg(not(wasm))]
+#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
 pub(crate) unsafe fn unescape_trusted(input: &str) -> String {
     let input = input.as_bytes();
 
@@ -33,12 +35,28 @@ pub(crate) unsafe fn unescape_trusted(input: &str) -> String {
         buf: Vec::with_capacity(input.len()),
     };
 
-    // when avx2 is available, we can vectorize
-    if is_x86_feature_detected!("avx2") && input.len() > simd::BLOCK_SIZE {
-        // SAFETY: the input is UTF8
-        // SAFETY: avx2 is available
-        simd::unescape(input, &mut scan, &mut unescaped);
-        return unescape_end(input, scan, unescaped);
+    // when SIMD is available, we can vectorize
+    #[cfg(target_arch = "x86_64")]
+    {
+        if is_x86_feature_detected!("avx2")
+            && input.len() > simd::X86_64_AVX2_VECTORIZATION_THRESHOLD
+        {
+            // SAFETY: the input is UTF8
+            // SAFETY: avx2 is available
+            simd::unescape_x86_64_avx2(input, &mut scan, &mut unescaped);
+            return unescape_end(input, scan, unescaped);
+        }
+    }
+    #[cfg(target_arch = "aarch64")]
+    {
+        if std::arch::is_aarch64_feature_detected!("neon")
+            && input.len() > simd::AARCH64_NEON_VECTORIZATION_THRESHOLD
+        {
+            // SAFETY: the input is UTF8
+            // SAFETY: neon is available
+            simd::unescape_aarch64_neon(input, &mut scan, &mut unescaped);
+            return unescape_end(input, scan, unescaped);
+        }
     }
 
     // when avx2 is not available, we need to fallback
@@ -47,7 +65,7 @@ pub(crate) unsafe fn unescape_trusted(input: &str) -> String {
     unescape_end(input, scan, unescaped)
 }
 
-#[cfg(wasm)]
+#[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
 pub(crate) unsafe fn unescape_trusted(input: &str) -> String {
     let input = input.as_bytes();
 
@@ -210,12 +228,10 @@ fn interest_unescape<'a, I: BorrowMut<ScanFnInput<'a>>>(mut i: I) {
                     .unwrap_or(false)
                 {
                     let mut unescape = || {
-                        use std::convert::TryFrom;
-
                         let digits = str::from_utf8(offset_from_raw_parts!(
                             i.input.as_ptr(),
                             i.input.len(),
-                            i.curr_offset as isize,
+                            i.curr_offset,
                             4
                         ))
                         .map_err(|_| ())?;
@@ -228,10 +244,8 @@ fn interest_unescape<'a, I: BorrowMut<ScanFnInput<'a>>>(mut i: I) {
                         match i.scan.first_surrogate.take() {
                             // if we had a surrogate pair, then attempt to map it to a multibyte
                             Some(first) => {
-                                let ch = crate::std_ext::char::try_from_utf16_surrogate_pair(
-                                    first, code,
-                                )
-                                .map_err(|_| ())?;
+                                let ch = crate::std_ext::char::try_from_utf16_surrogate_pair(first, code)
+                                    .map_err(|_| ())?;
                                 i.push_unescaped_char(ch);
                             }
                             // if we didn't have a surrogate pair,

@@ -3,10 +3,18 @@
 ## 🐿⚡
 
 This is the JSON deserializer used by Seq's storage engine. You might find this useful if you're
-building a document database that stores documents as minified JSON maps.
+building a document database that stores documents as minified JSON maps. The job of this code is to take a
+minified JSON object, like:
 
-`squirrel-json` is a vectorized parser for minified JSON documents. This library is optimized for chewing through
-very large numbers of normalized documents where only fragments of those documents may be needed.
+```json
+{"@t":"2020-03-12T17:08:37.6065924Z","@mt":"Redirecting to continue intent {Intent}","Elapsed":3456}
+```
+
+and produce a flat tape of offsets into that document that can be fed to a traditional JSON parser to extract. It scans through
+the document using vectorized CPU instructions that find and classify the features of the document very efficiently.
+If only a fraction of that document is actually needed to satisfy a given query then only that fraction will pay the cost of
+full deserialization. This is how Seq supports performant queries over log data without attempting to fit it into
+column storage, or requiring it to reside in RAM.
 
 `squirrel-json` takes inspiration from [`simd-json`](https://github.com/simd-lite/simd-json) and is _very_ fast.
 `squirrel-json` is an interesting piece of software, but is neither as useful nor as interesting as
@@ -15,6 +23,12 @@ to perform very well for sparse deserialization of pre-validated JSON maps at th
 unsuitable for just about anything else.
 
 See [this blog post](https://blog.datalust.co/deserializing-json-really-fast/) for some more details!
+
+## Platform support
+
+This library currently supports x86 using AVX2 intrinsics, and ARM using Neon intrinsics. Other platforms
+are supported using a slower (but still reasonably fast) fallback parser. Unfortunately we don't have
+a way to test ARM in CI here yet, so support is best-effort.
 
 ## ⚠️ CAREFUL
 

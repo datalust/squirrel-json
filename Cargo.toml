@@ -7,7 +7,7 @@ members = [
 name = "squirrel-json"
 version = "0.0.0"
 authors = ["Datalust"]
-edition = "2018"
+edition = "2021"
 build = "build.rs"
 license = "MIT OR Apache-2.0"
 
@@ -30,6 +30,9 @@ version = "0.3"
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies.js-sys]
 version = "0.3"
 
+[dev-dependencies.rand]
+version = "0.8"
+
 [dev-dependencies.serde_json]
 version = "1"
 
@@ -37,7 +40,7 @@ version = "1"
 version = "0.12"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies.simd-json]
-version = "0.3"
+version = "0.5"
 features = [
     # Doesn't disable the SIMD implementation, it just doesn't fail to compile
     # if we don't pass `target-cpu=native`

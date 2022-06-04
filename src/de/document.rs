@@ -15,7 +15,7 @@ Documents can be constructed in one of two ways:
 #[derive(Clone)]
 pub struct Document<'input> {
     pub(super) input: &'input [u8],
-    pub(super) offsets: Offsets,
+    pub(super) offsets: Cow<'input, Offsets>,
     pub(super) _detached_stack: Vec<ActiveMapArr>,
 }
 
@@ -359,7 +359,7 @@ impl Slice {
         from_utf8_unchecked!(offset_from_raw_parts!(
             input.as_ptr(),
             input.len(),
-            self.offset as isize,
+            self.offset as usize,
             self.len as usize
         ))
     }
