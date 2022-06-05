@@ -1,10 +1,10 @@
 /*!
 Deserialization for minified JSON objects.
 
-This module contains a parser for previously validated minified JSON input.
-It uses a _lot_ of unsafe code, but guarantees UB freedom through its public API.
-What it doesn't guarantee is how useful the result will be when the input is not
-a single valid JSON map with no whitespace.
+This module contains a parser for previously trusted minified JSON input.
+It uses a _lot_ of unsafe code, but guarantees UB freedom. What it doesn't
+guarantee is how useful the result will be when the input is not a single
+valid JSON map with no whitespace.
 
 The parser proceeds linearly, maintaining a stack and its current position
 within the document. It isn't recursive.
@@ -14,7 +14,7 @@ There are two implementations:
 - an AVX2 vectorized implementation,
 - and a byte-by-byte fallback implementation.
 
-Both use the same functions to track offsets in the document, the AVX2 implementation
+Both use the same functions to track offsets in the document, the AVX implementation
 is just able to skip over sequences of bytes that don't contain any interesting input.
 For valid JSON documents, the two implementations will produce the same results, but
 for invalid JSON documents their results may diverge.
@@ -31,11 +31,15 @@ mod document;
 
 mod fallback;
 mod interest;
+
+#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
 mod simd;
 
-use std::{mem, str};
+use std::{borrow::Cow, mem, str};
 
 use interest::*;
+
+#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
 use simd::Simd;
 
 pub use document::*;
@@ -46,8 +50,8 @@ impl<'input> Document<'input> {
 
     # What does _trusted_ mean?
 
-    The parser validates UTF8, but otherwise assumes the input has been previously
-    validated as a minified JSON object. While this process doesn't guarantee the
+    This implementation assumes the input has been previously validated
+    as a minified JSON object. While this process doesn't guarantee the
     results it returns on invalid JSON, or when the input is not a document,
     it does guarantee UB freedom. That means any strings returned are valid
     UTF8 and any offsets within the parsed parts are guaranteed to be within the document.
@@ -88,15 +92,33 @@ impl<'input> Document<'input> {
         scan_fallback(input, DetachedDocument::default())
     }
 
+    #[doc(hidden)]
+    #[cfg(checked)]
+    pub fn scan_trusted_checked(input: &'input [u8]) -> Self {
+        Self::scan_trusted(input)
+    }
+
+    #[doc(hidden)]
+    #[cfg(checked)]
+    pub fn scan_trusted_attach_checked(input: &'input [u8], detached: DetachedDocument) -> Self {
+        Self::scan_trusted_attach(input, detached)
+    }
+
+    #[doc(hidden)]
+    #[cfg(checked)]
+    pub fn scan_trusted_fallback_checked(input: &'input [u8]) -> Self {
+        Self::scan_trusted_fallback(input)
+    }
+
     #[cold]
     fn err(input: &'input [u8]) -> Self {
         Document {
             input,
-            offsets: Offsets {
+            offsets: Cow::Owned(Offsets {
                 elements: Vec::new(),
                 err: true,
                 root_size_hint: 0,
-            },
+            }),
             _detached_stack: Vec::new(),
         }
     }
@@ -117,7 +139,7 @@ impl<'input> Document<'input> {
     */
     #[inline]
     pub fn detach(self) -> DetachedDocument {
-        let mut offsets = self.offsets.elements;
+        let mut offsets = self.offsets.into_owned().elements;
         offsets.clear();
 
         let mut stack = self._detached_stack;
@@ -130,8 +152,16 @@ impl<'input> Document<'input> {
     Take the offsets from this document.
     */
     #[inline]
-    pub fn into_offsets(self) -> Offsets {
+    pub fn into_offsets(self) -> Cow<'input, Offsets> {
         self.offsets
+    }
+
+    /**
+    Get the offsets from this document.
+    */
+    #[inline]
+    pub fn offsets(&self) -> &Offsets {
+        self.offsets.borrow()
     }
 }
 
@@ -153,6 +183,7 @@ An allocation for offsets that's been detached from a document.
 This allocation can be re-used by future documents. They don't need
 to be from the same buffer.
 */
+#[derive(Clone)]
 pub struct DetachedDocument {
     offsets: Vec<Offset>,
     stack: Vec<ActiveMapArr>,
@@ -215,6 +246,14 @@ impl Default for Part {
 type PrevPartOffsets = [Option<u16>; 4];
 
 impl Offsets {
+    pub fn empty() -> Self {
+        Offsets {
+            elements: Vec::new(),
+            err: false,
+            root_size_hint: 0,
+        }
+    }
+
     #[inline]
     fn attach(elements: Vec<Offset>) -> Self {
         Offsets {
@@ -234,10 +273,10 @@ impl Offsets {
     the input if it is not exactly equal to the input that originally produced the offsets.
     */
     #[inline]
-    pub unsafe fn to_document_unchecked<'a>(&self, input: &'a [u8]) -> Document<'a> {
+    pub unsafe fn to_document_unchecked<'a>(&'a self, input: &'a [u8]) -> Document<'a> {
         Document {
             input,
-            offsets: self.clone(),
+            offsets: Cow::Borrowed(self),
             _detached_stack: Vec::new(),
         }
     }
@@ -246,10 +285,14 @@ impl Offsets {
     fn push(&mut self, part: Offset) {
         self.elements.push(part);
     }
+
+    pub fn approximate_size(&self) -> usize {
+        mem::size_of::<Self>() + (mem::size_of::<Offset>() * self.elements.len())
+    }
 }
 
 #[inline]
-#[cfg(not(wasm))]
+#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
 fn scan(input: &[u8], detached: DetachedDocument) -> Document {
     let (start, end) = match scan_begin(input) {
         Some(bounds) => bounds,
@@ -259,23 +302,40 @@ fn scan(input: &[u8], detached: DetachedDocument) -> Document {
     let mut scan = Scan::attach(detached.stack, start, end);
     let mut offsets = Offsets::attach(detached.offsets);
 
-    // when avx2 is available, we can vectorize
+    // when SIMD is available, we can vectorize
     // HEURISTIC: small documents aren't worth vectorizing
-    if is_x86_feature_detected!("avx2") && scan.input_remaining() > Simd::VECTORIZATION_THRESHOLD {
-        // SAFETY: the input is UTF8
-        // SAFETY: avx2 is available
-        unsafe { simd::scan(input, &mut scan, &mut offsets) };
-        return scan_end(input, scan, offsets);
+    #[cfg(target_arch = "x86_64")]
+    {
+        if is_x86_feature_detected!("avx2")
+            && scan.input_remaining() > simd::X86_64_AVX2_VECTORIZATION_THRESHOLD
+        {
+            // SAFETY: the input is UTF8
+            // SAFETY: avx2 is available
+            unsafe { simd::scan_x86_64_avx2(input, &mut scan, &mut offsets) };
+            return scan_end(input, scan, offsets);
+        }
+    }
+    #[cfg(target_arch = "aarch64")]
+    {
+        if std::arch::is_aarch64_feature_detected!("neon")
+            && scan.input_remaining() > simd::AARCH64_NEON_VECTORIZATION_THRESHOLD
+        {
+            // SAFETY: the input is UTF8
+            // SAFETY: neon is available
+            unsafe { simd::scan_aarch64_neon(input, &mut scan, &mut offsets) };
+            return scan_end(input, scan, offsets);
+        }
     }
 
-    // when avx2 is not available, we need to fallback
+    // when SIMD is not available, we need to fallback
     // SAFETY: the input is UTF8
     unsafe { fallback::scan(input, &mut scan, &mut offsets) };
     scan_end(input, scan, offsets)
 }
 
-#[cfg(wasm)]
+#[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
 use self::scan_fallback as scan;
+use std::borrow::Borrow;
 
 #[inline]
 fn scan_fallback(input: &[u8], detached: DetachedDocument) -> Document {
@@ -367,7 +427,7 @@ fn scan_end(input: &[u8], mut scan: Scan, mut offsets: Offsets) -> Document {
     }
 
     // if the offsets count is greater than `u16::max_value` then we've overflowed
-    if offsets.elements.len() > u16::max_value() as usize {
+    if offsets.elements.len() > u16::MAX as usize {
         scan.error = true;
         test_unreachable!("overflowed max offset size");
     }
@@ -379,7 +439,7 @@ fn scan_end(input: &[u8], mut scan: Scan, mut offsets: Offsets) -> Document {
     if !scan.error {
         Document {
             input,
-            offsets,
+            offsets: Cow::Owned(offsets),
             _detached_stack: scan.stack.bottom,
         }
     } else {
@@ -422,6 +482,7 @@ struct Scan {
     Even when the input isn't being processed using SIMD, its state needs to be kept consistent
     so that it can pick up after the fallback implementation.
     */
+    #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
     simd: Simd,
     /**
     State for tracking the current depth within the input.
@@ -534,12 +595,13 @@ impl Scan {
             escape: false,
             error: false,
             stack: Stack::attach(stack),
+            #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
             simd: Simd::new(),
         }
     }
 
     #[inline]
-    #[cfg(not(wasm))]
+    #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
     fn input_remaining(&self) -> usize {
         self.input_len - (self.input_offset as usize)
     }

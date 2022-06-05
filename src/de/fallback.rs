@@ -14,7 +14,7 @@ pub(super) unsafe fn scan<'scan>(input: &'scan [u8], scan: &mut Scan, offsets: &
 
 // SAFETY: Callers must ensure `input` is valid UTF8
 #[inline(always)]
-#[cfg(not(wasm))]
+#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
 pub(super) unsafe fn scan_to<'scan>(
     input: &'scan [u8],
     scan: &mut Scan,

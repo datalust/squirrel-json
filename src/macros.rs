@@ -110,12 +110,12 @@ macro_rules! offset_from_raw_parts {
             let offset = $offset;
             let len = $len;
 
-            assert!(offset > 0 && offset as usize + len <= (base_ptr as usize) + base_len);
+            assert!(offset + len <= (base_ptr as usize) + base_len);
 
             // SAFETY: the input must always be within the slice
             #[allow(unused_unsafe)]
             unsafe {
-                std::slice::from_raw_parts((base_ptr).offset(offset), len)
+                std::slice::from_raw_parts((base_ptr).add(offset), len)
             }
         }
 
@@ -124,7 +124,7 @@ macro_rules! offset_from_raw_parts {
             // SAFETY: the input must always be within the slice
             #[allow(unused_unsafe)]
             unsafe {
-                std::slice::from_raw_parts(($base_ptr).offset($offset), $len)
+                std::slice::from_raw_parts(($base_ptr).add($offset), $len)
             }
         }
     }};
