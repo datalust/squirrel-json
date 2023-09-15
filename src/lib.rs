@@ -37,8 +37,8 @@ mod macros;
 
 mod std_ext;
 
-mod unescape;
 pub mod de;
+mod unescape;
 pub use de::Document;
 
 #[cfg(test)]
