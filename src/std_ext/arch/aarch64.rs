@@ -1,7 +1,5 @@
 #[cfg(any(target_feature = "neon", target_feature = "crc"))]
-use std::{
-    arch::aarch64::*,
-};
+use std::arch::aarch64::*;
 
 #[target_feature(enable = "neon")]
 #[inline]
@@ -31,6 +29,6 @@ pub unsafe fn vmovemask_u8(a: uint8x8_t) -> u8 {
             0b0010_0000,
             0b0100_0000,
             0b1000_0000,
-        ])
+        ]),
     ))
 }

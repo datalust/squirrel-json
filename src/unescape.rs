@@ -191,7 +191,7 @@ impl<'a> ScanFnInput<'a> {
 
 #[inline(always)]
 fn interest_unescape<'a, I: BorrowMut<ScanFnInput<'a>>>(mut i: I) {
-    let mut i = i.borrow_mut();
+    let i = i.borrow_mut();
 
     let escaped = i.scan.escape;
     i.scan.escape = !escaped;
@@ -244,8 +244,10 @@ fn interest_unescape<'a, I: BorrowMut<ScanFnInput<'a>>>(mut i: I) {
                         match i.scan.first_surrogate.take() {
                             // if we had a surrogate pair, then attempt to map it to a multibyte
                             Some(first) => {
-                                let ch = crate::std_ext::char::try_from_utf16_surrogate_pair(first, code)
-                                    .map_err(|_| ())?;
+                                let ch = crate::std_ext::char::try_from_utf16_surrogate_pair(
+                                    first, code,
+                                )
+                                .map_err(|_| ())?;
                                 i.push_unescaped_char(ch);
                             }
                             // if we didn't have a surrogate pair,
