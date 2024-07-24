@@ -2,7 +2,7 @@
 
 ## 🐿⚡
 
-This is the JSON deserializer used by Seq's storage engine. You might find this useful if you're
+This is heavily based on the JSON deserializer used by Seq's storage engine. You might find this useful if you're
 building a document database that stores documents as minified JSON maps. The job of this code is to take a
 minified JSON object, like:
 
